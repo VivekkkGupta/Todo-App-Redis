@@ -10,32 +10,68 @@ import axios from "axios"
 
 export default function TodoApp() {
 
-  const [userId, setUserId] = useState("user123")
-
   const [todos, setTodos] = useState([])
   const [newTodo, setNewTodo] = useState("")
   const [editingId, setEditingId] = useState(null)
   const [editText, setEditText] = useState("")
 
-  const addTodo = () => {
+  const addTodo = async () => {
     if (newTodo.trim() === "") return
-
-    const todo = {
-      id: Date.now(),
-      text: newTodo,
-      completed: false,
+    try {
+      const res = await axios.post("/api/todos", {
+        "title": `${newTodo}`,
+      })
+      const data = res.data
+      if (res.status !== 200) {
+        throw new Error("Failed to add todo")
+      }
+      setTodos(data.todos)
+      setNewTodo("")
+    } catch (error) {
+      console.error("Error adding todo:", error)
     }
-
-    setTodos([...todos, todo])
-    setNewTodo("")
   }
 
-  const deleteTodo = (id) => {
-    setTodos(todos.filter((todo) => todo.id !== id))
+  const deleteTodo = async (id) => {
+    if (!id) return
+    if(id === editingId) {
+      setEditingId(null)
+      setEditText("")
+    }
+    try {
+      const res = await axios.delete(`/api/todos/${id}`)
+      const data = res.data
+      if (res.status !== 200) {
+        throw new Error("Failed to delete todo")
+      }
+      setTodos(data.todos)
+    } catch (error) {
+      console.error("Error deleting todo:", error)
+    }
   }
 
-  const toggleComplete = (id) => {
-    setTodos(todos.map((todo) => (todo.id === id ? { ...todo, completed: !todo.completed } : todo)))
+  const toggleComplete = async (id) => {
+
+    try {
+      let res = ""
+      if (todos[id].completed === "true") {
+        res = await axios.put(`/api/todos`, { "id": id, "title": todos[id].title, "completed": "false" })
+      } else {
+        res = await axios.put(`/api/todos`, { "id": id, "title": todos[id].title, "completed": "true" })
+      }
+      if (!res) {
+        console.error("Error toggling todo:", error)
+        return
+      }
+      const data = res.data
+      if (res.status !== 200) {
+        throw new Error("Failed to toggle todo")
+      }
+      setTodos(data.todos)
+    }
+    catch (error) {
+      console.error("Error toggling todo:", error)
+    }
   }
 
   const startEdit = (todo) => {
@@ -43,11 +79,26 @@ export default function TodoApp() {
     setEditText(todo.text)
   }
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (editText.trim() === "") return
+    // If the text hasn't changed, just exit
+    if (todos[editingId].text === editText) {
+      setEditingId(null)
+      return
+    }
 
-    setTodos(todos.map((todo) => (todo.id === editingId ? { ...todo, text: editText } : todo)))
-    setEditingId(null)
+    try {
+      const res = await axios.put(`/api/todos`, { "id": editingId, "title": editText, "completed": todos[editingId].completed });
+      const data = res.data
+      if (res.status !== 200) {
+        throw new Error("Failed to save todo")
+      }
+      setTodos(data.todos)
+      setEditText("")
+      setEditingId(null)
+    } catch (error) {
+      console.error("Error saving todo:", error)
+    }
   }
 
   const handleKeyDown = (e) => {
@@ -71,11 +122,9 @@ export default function TodoApp() {
 
   useEffect(() => {
     fetchTodos()
+    console.log("Todos fetched:", todos)
   }, [])
 
-  useEffect(() => {
-    console.log("Todos updated:", todos)
-  }, [todos])
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -117,7 +166,7 @@ export default function TodoApp() {
                       const todo = todos[key]; // Access the todo object using the key
                       return (
                         <TableRow key={todo.id} className={todo.completed ? "bg-muted/50" : ""}>
-                          <TableCell className={`${todo.completed ? "line-through text-muted-foreground" : ""}`}>
+                          <TableCell className={`${todo.completed === "true" ? "line-through text-muted-foreground" : ""}`}>
                             {editingId === todo.id ? (
                               <Input
                                 value={editText}
@@ -139,7 +188,7 @@ export default function TodoApp() {
                                 className="h-8 w-8"
                               >
                                 <Check className="h-4 w-4" />
-                                <span className="sr-only">Mark as {todo.completed ? "incomplete" : "complete"}</span>
+                                <span className="sr-only">Mark as {todo.completed === "true" ? "incomplete" : "complete"}</span>
                               </Button>
                               <Button
                                 variant="outline"
